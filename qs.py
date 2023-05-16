@@ -82,12 +82,15 @@ def qs_parse(qs: str, keep_blank_values: bool = False, strict_parsing: bool = Fa
 
                     match new_value:
                         case _ if i == 0:
-                            tokens[match] = [new_value]
+                            tokens[match] = new_value
                         case dict():
                             tokens[match] = merge(new_value, tokens[match])
                         case list() | tuple():
                             tokens[match] = tokens[match] + list(new_value)
                         case _:
+                            if not isinstance(tokens[match], list):
+                                # The key is duplicated, so we transform the first value into a list so we can append the new one
+                                tokens[match] = [tokens[match]]
                             tokens[match].append(new_value)
 
     for name_val in pairs:
@@ -166,7 +169,7 @@ class TestURLParsing(unittest.TestCase):
 
     def test_qs_parse_no_strict_no_blanks(self):
         qs = "a=1&b=2&c=3"
-        expected = {"a": ["1"], "b": ["2"], "c": ["3"]}
+        expected = {"a": "1", "b": "2", "c": "3"}
         self.assertEqual(qs_parse(qs), expected)
 
     def test_qs_parse_with_strict(self):
@@ -176,14 +179,14 @@ class TestURLParsing(unittest.TestCase):
 
     def test_qs_parse_keep_blanks(self):
         qs = "a=1&b=2&c"
-        expected = {"a": ["1"], "b": ["2"], "c": [""]}
+        expected = {"a": "1", "b": "2", "c": ""}
         self.assertEqual(qs_parse(qs, keep_blank_values=True), expected)
 
     def test_simple_duplicates_wrong(self):
         qs = "a=1&a=2&a=3&a=4"
 
         # Mimic PHP parse_str
-        expected = {"a": ["4"]}
+        expected = {"a": "4"}
         self.assertEqual(qs_parse(qs), expected)
 
     def test_simple_duplicates_rigth(self):
