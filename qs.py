@@ -2,25 +2,55 @@ import re
 from urllib.parse import unquote, quote_plus
 from typing import Mapping, Any, cast
 import unittest
+from copy import deepcopy
+
+
+# Map a list to an equivalent dictionary
+# e.g: ["a","b","c"] -> {0:"a",1:"b",2:"c"}
+def list_to_dict(lst: list):
+    return {i: value for i, value in enumerate(lst)}
+
+
+def merge_dict_in_list(source: dict, destination: list) -> list | dict:
+    # Retain only integer keys:
+    int_keys = sorted([key for key in source.keys() if isinstance(key, int)])
+    array_values = [source[key] for key in int_keys]
+    merged_array = array_values + destination
+
+    if len(int_keys) == len(source.keys()):
+        return merged_array
+
+    return merge(source, list_to_dict(merged_array))
 
 
 def merge(source: Any, destination: Any):
-    """
-    taken from: http://stackoverflow.com/a/20666342
+    source = deepcopy(source)
+    destination = deepcopy(destination)
 
-    """
-    for key, value in source.items():
-        if isinstance(value, dict):
+    # print("DBG: ", source, destination)
+    if isinstance(source, list) and isinstance(destination, list):
+        return source + destination
+
+    if isinstance(source, dict) and isinstance(destination, list):
+        return merge_dict_in_list(source, destination)
+
+    items = cast(Mapping, source).items()
+    for key, value in items:
+        if isinstance(value, dict) and isinstance(destination, dict):
             # get node or create one
             node = destination.setdefault(key, {})
-            merge(value, node)
+            node = merge(value, node)
+            destination[key] = node
         else:
             if (
                 isinstance(value, list) or isinstance(value, tuple)
             ) and key in destination:
-                value = destination[key] + value
+                # if isinstance(destination[key], dict) and isinstance(value, list):
+                # value = destination[key] + value
+                value = merge(destination[key], value)
+            if isinstance(key, str) and isinstance(destination, list):
+                destination = list_to_dict(destination)
             destination[key] = value
-
     return destination
 
 
@@ -47,8 +77,8 @@ def qs_parse(qs: str, keep_blank_values: bool = False, strict_parsing: bool = Fa
                 is_list = isinstance(new_value, list) or isinstance(new_value, tuple)
                 is_dict = isinstance(new_value, dict)
 
-                if is_list:
-                    match = match + "[]"
+                # if is_list:
+                #     match = match + "[]"
 
                 if match not in tokens:
                     tokens[match] = [] if not is_dict else {}
@@ -130,6 +160,12 @@ class TestURLParsing(unittest.TestCase):
         expected = {"a": 1, "b": {"c": 2, "d": 4}}
         self.assertEqual(merge(source, destination), expected)
 
+    def test_merge_array(self):
+        source = {0: "nest", "key6": "deep"}
+        destination = ["along"]
+        expected = {0: "nest", "key6": "deep", 1: "along"}
+        self.assertEqual(merge(source, destination), expected)
+
     def test_qs_parse_no_strict_no_blanks(self):
         qs = "a=1&b=2&c=3"
         expected = {"a": ["1"], "b": ["2"], "c": ["3"]}
@@ -144,6 +180,48 @@ class TestURLParsing(unittest.TestCase):
         qs = "a=1&b=2&c"
         expected = {"a": ["1"], "b": ["2"], "c": [""]}
         self.assertEqual(qs_parse(qs, keep_blank_values=True), expected)
+
+    def test_simple_duplicates_wrong(self):
+        qs = "a=1&a=2&a=3&a=4"
+
+        # Mimic PHP parse_str
+        expected = {"a": ["4"]}
+        self.assertEqual(qs_parse(qs), expected)
+
+    def test_simple_duplicates_rigth(self):
+        qs = "a[]=1&a[]=2&a[]=3&a[]=4"
+
+        # Mimic PHP parse_str
+        expected = {"a": ["1", "2", "3", "4"]}
+        self.assertEqual(qs_parse(qs), expected)
+
+    def test_qs_parse_complex(self):
+        qs = "key1[key2][key3][key4][]=ho&key1[key2][key3][key4][]=hey&key1[key2][key3][key4][]=choco&key1[key2][key3][key4][key5][]=nest"
+        qs += "&key1[key2][key3][key4][key5][key6]=deep&key1[key2][key3][key4][key5][]=along&key1[key2][key3][key4][key5][key5_1]=hello"
+        expected = {
+            "key1": {
+                "key2": {
+                    "key3": {
+                        "key4": {
+                            0: "ho",
+                            1: "hey",
+                            2: "choco",
+                            "key5": {
+                                0: "nest",
+                                "key6": "deep",
+                                1: "along",
+                                "key5_1": "hello",
+                            },
+                        }
+                    }
+                }
+            }
+        }
+        old = self.maxDiff
+        self.maxDiff = None
+        output = qs_parse(qs)
+        self.assertEqual(output, expected)
+        self.maxDiff = old
 
     def test_build_qs(self):
         query = {"a": 1, "b": 2, "c": 3}
