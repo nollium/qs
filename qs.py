@@ -27,12 +27,11 @@ def merge(source: Any, destination: Any):
     source = deepcopy(source)
     destination = deepcopy(destination)
 
-    # print("DBG: ", source, destination)
-    if isinstance(source, list) and isinstance(destination, list):
-        return source + destination
-
-    if isinstance(source, dict) and isinstance(destination, list):
-        return merge_dict_in_list(source, destination)
+    match (source, destination):
+        case (list(), list()):
+            return source + destination
+        case (dict(), list()):
+            return merge_dict_in_list(source, destination)
 
     items = cast(Mapping, source).items()
     for key, value in items:
