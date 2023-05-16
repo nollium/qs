@@ -45,8 +45,6 @@ def merge(source: Any, destination: Any):
             if (
                 isinstance(value, list) or isinstance(value, tuple)
             ) and key in destination:
-                # if isinstance(destination[key], dict) and isinstance(value, list):
-                # value = destination[key] + value
                 value = merge(destination[key], value)
             if isinstance(key, str) and isinstance(destination, list):
                 destination = list_to_dict(destination)
@@ -76,9 +74,6 @@ def qs_parse(qs: str, keep_blank_values: bool = False, strict_parsing: bool = Fa
             else:
                 is_list = isinstance(new_value, list) or isinstance(new_value, tuple)
                 is_dict = isinstance(new_value, dict)
-
-                # if is_list:
-                #     match = match + "[]"
 
                 if match not in tokens:
                     tokens[match] = [] if not is_dict else {}
