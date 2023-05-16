@@ -63,29 +63,33 @@ def qs_parse(qs: str, keep_blank_values: bool = False, strict_parsing: bool = Fa
 
         new_value: str | list | dict = value
         for i, match in enumerate(matches[::-1]):
-            if match == "[]":
-                if i == 0:
-                    new_value = [new_value]
-                else:
-                    new_value += new_value
-            elif re.match(r"\[\w+\]", match):
-                name = re.sub(r"[\[\]]", "", match)
-                new_value = {name: new_value}
-            else:
-                is_list = isinstance(new_value, list) or isinstance(new_value, tuple)
-                is_dict = isinstance(new_value, dict)
+            match match:
+                case "[]":
+                    if i == 0:
+                        new_value = [new_value]
+                    else:
+                        # TODO: Ensure this does not break
+                        new_value += new_value  # type: ignore
+                case _ if re.match(r"\[\w+\]", match):
+                    name = re.sub(r"[\[\]]", "", match)
+                    new_value = {name: new_value}
+                case _:
+                    if match not in tokens:
+                        match new_value:
+                            case list() | tuple():
+                                tokens[match] = []
+                            case dict():
+                                tokens[match] = {}
 
-                if match not in tokens:
-                    tokens[match] = [] if not is_dict else {}
-
-                if i == 0:
-                    tokens[match] = [new_value]
-                elif is_dict:
-                    tokens[match] = merge(new_value, tokens[match])
-                elif is_list:
-                    tokens[match] = tokens[match] + list(new_value)
-                else:
-                    tokens[match].append(new_value)
+                    match new_value:
+                        case _ if i == 0:
+                            tokens[match] = [new_value]
+                        case dict():
+                            tokens[match] = merge(new_value, tokens[match])
+                        case list() | tuple():
+                            tokens[match] = tokens[match] + list(new_value)
+                        case _:
+                            tokens[match].append(new_value)
 
     for name_val in pairs:
         if not name_val and not strict_parsing:
